@@ -235,7 +235,7 @@ async function downloadAudio(conn, job, asDocument, quoted) {
 
   // 3) Límite ~99MB
   const sizeMB = fileSizeMB(outFile);
-  if (sizeMB > 99) {
+  if (sizeMB > 1024) {
     try { fs.unlinkSync(outFile); } catch {}
     await conn.sendMessage(chatId, { text: `❌ El archivo de audio pesa ${sizeMB.toFixed(2)}MB (>99MB).` }, { quoted });
     return;
