@@ -50,6 +50,7 @@ const figlet = require("figlet");
 const readline = require("readline");
 const pino = require("pino");
 const { setConfig, getConfig } = require("./db");
+
 // 🌐 Prefijos personalizados desde prefijos.json o por defecto
 let defaultPrefixes = [".", "#"];
 const prefixPath = "./prefijos.json";
@@ -97,6 +98,7 @@ const loadPluginsRecursively = (dir) => {
 // 👉 Cargar todos los .js dentro de ./plugins y subcarpetas
 global.plugins = [];
 loadPluginsRecursively("./plugins");
+
 // 🎯 Función global para verificar si es owner
 global.isOwner = function (jid) {
   const num = jid.replace(/[^0-9]/g, "");
@@ -162,7 +164,14 @@ let phoneNumber = "";
         browser: method === "1" ? ["AzuraBot", "Safari", "1.0.0"] : ["Ubuntu", "Chrome", "20.0.04"],
         printQRInTerminal: method === "1",
       });
-      setupConnection(sock)
+
+      // ⬇️⬇️ **INYECCIÓN WA PARA TODOS LOS PLUGINS** ⬇️⬇️
+      global.wa = { downloadContentFromMessage };
+      // por comodidad, también accesible como conn.wa
+      sock.wa = global.wa;
+      // ⬆️⬆️------------------------------------------------ ⬆️⬆️
+
+      setupConnection(sock);
 
       // 🔧 Normaliza participants: si id es @lid y existe .jid (real), reemplaza por el real
       sock.lidParser = function (participants = []) {
@@ -183,7 +192,8 @@ let phoneNumber = "";
       for (const plugin of global.plugins) {
         if (typeof plugin.run === "function") {
           try {
-            plugin.run(sock);
+            // Pasamos wa como segundo argumento opcional (no rompe nada si el plugin no lo usa)
+            plugin.run(sock, { wa: global.wa });
             console.log(chalk.magenta("🧠 Plugin con eventos conectado"));
           } catch (e) {
             console.error(chalk.red("❌ Error al ejecutar evento del plugin:"), e);
