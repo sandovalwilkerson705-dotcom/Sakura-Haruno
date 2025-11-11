@@ -1,77 +1,134 @@
-const fs = require('fs');
-const path = require('path');
-const FormData = require('form-data');
-const axios = require('axios');
-const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
-// const { downloadContentFromMessage } = require('@adiwajshing/baileys'); // según tu versión
+// plugins/hd.js
+const fs = require("fs");
+const path = require("path");
+const FormData = require("form-data");
+const axios = require("axios");
 
-const handler = async (msg, { conn, command }) => {
+// Desencapsula viewOnce/ephemeral
+function unwrapMessage(m) {
+  let n = m;
+  while (
+    n?.viewOnceMessage?.message ||
+    n?.viewOnceMessageV2?.message ||
+    n?.viewOnceMessageV2Extension?.message ||
+    n?.ephemeralMessage?.message
+  ) {
+    n =
+      n.viewOnceMessage?.message ||
+      n.viewOnceMessageV2?.message ||
+      n.viewOnceMessageV2Extension?.message ||
+      n.ephemeralMessage?.message;
+  }
+  return n;
+}
+
+// Obtiene el módulo de Baileys inyectado
+function ensureWA(wa, conn) {
+  if (wa && typeof wa.downloadContentFromMessage === "function") return wa;
+  if (conn && conn.wa && typeof conn.wa.downloadContentFromMessage === "function") return conn.wa;
+  if (global.wa && typeof global.wa.downloadContentFromMessage === "function") return global.wa;
+  return null;
+}
+
+const handler = async (msg, { conn, command, wa }) => {
   const chatId = msg.key.remoteJid;
-  const pref   = global.prefixes?.[0] || '.';
+  const pref   = global.prefixes?.[0] || ".";
 
-  // 1) Verificar que responda a una imagen
-  const quotedCtx = msg.message?.extendedTextMessage?.contextInfo;
-  const quoted    = quotedCtx?.quotedMessage;
+  const ctx = msg.message?.extendedTextMessage?.contextInfo;
+  const quotedRaw = ctx?.quotedMessage;
+  const quoted = quotedRaw ? unwrapMessage(quotedRaw) : null;
+
   if (!quoted?.imageMessage) {
     return conn.sendMessage(chatId, {
-      text: `✳️ *Usa:*\n${pref}${command}\n📌 Responde a una imagen para mejorarla.`
+      text: `✳️ *Usa:*\n${pref}${command}\n📌 Responde a una *imagen* para mejorarla.`
     }, { quoted: msg });
   }
 
-  // 2) Reacción “procesando”
-  await conn.sendMessage(chatId, { react: { text: '🧪', key: msg.key } });
+  try { await conn.sendMessage(chatId, { react: { text: "🧪", key: msg.key } }); } catch {}
 
+  const WA = ensureWA(wa, conn);
+  if (!WA) {
+    try { await conn.sendMessage(chatId, { react: { text: "❌", key: msg.key } }); } catch {}
+    return conn.sendMessage(chatId, { text: "❌ *Error interno:* downloader no disponible (inyecta `wa` en index.js)." }, { quoted: msg });
+  }
+
+  const tmpDir = path.join(__dirname, "tmp");
+  if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+
+  let tmpFile = null;
   try {
-    // 3) Descargar la imagen en un archivo temporal
-    const tmpDir = path.join(__dirname, 'tmp');
-    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
-
-    const stream = await downloadContentFromMessage(quoted.imageMessage, 'image');
-    const tmpFile = path.join(tmpDir, `${Date.now()}_hd.jpg`);
+    // 1) Descargar imagen citada a un archivo temporal
+    const imgNode = quoted.imageMessage;
+    const stream = await WA.downloadContentFromMessage(imgNode, "image");
+    const ext = (imgNode.mimetype?.split("/")[1] || "jpg").replace(/^x-/, "");
+    tmpFile = path.join(tmpDir, `${Date.now()}_hd.${ext}`);
     const ws = fs.createWriteStream(tmpFile);
     for await (const chunk of stream) ws.write(chunk);
-    ws.end();
-    await new Promise(resolve => ws.on('finish', resolve));
+    await new Promise((r) => ws.end(r));
 
-    // 4) Subir al CDN
-    const uploadForm = new FormData();
-    uploadForm.append('file', fs.createReadStream(tmpFile));
-    const up = await axios.post('https://cdn.russellxz.click/upload.php', uploadForm, {
-      headers: uploadForm.getHeaders()
+    // 2) Subir al CDN
+    const form = new FormData();
+    form.append("file", fs.createReadStream(tmpFile));
+    const up = await axios.post("https://cdn.russellxz.click/upload.php", form, {
+      headers: form.getHeaders(),
+      timeout: 30000,
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+      validateStatus: s => s >= 200 && s < 500
     });
-    fs.unlinkSync(tmpFile);
-    if (!up.data?.url) throw new Error('No se obtuvo URL al subir al CDN.');
-    const imageUrl = up.data.url;
 
-    // 5) Llamar a la API de Remini
-    const API_KEY    = 'russellxz';
-    const REMINI_URL = 'https://api.neoxr.eu/api/remini';
-    const rem = await axios.get(
-      `${REMINI_URL}?image=${encodeURIComponent(imageUrl)}&apikey=${API_KEY}`
-    );
-    if (!rem.data?.status || !rem.data.data?.url) {
-      throw new Error('La API no devolvió URL de imagen mejorada.');
+    const imageUrl =
+      up?.data?.url ||
+      up?.data?.data?.url ||
+      up?.data?.result?.url ||
+      null;
+
+    if (!imageUrl) {
+      throw new Error("No se obtuvo URL del CDN (upload).");
     }
 
-    // 6) Enviar la imagen mejorada
+    // 3) Llamar a Remini (neoxr)
+    const API_KEY    = "russellxz"; // tu key
+    const REMINI_URL = "https://api.neoxr.eu/api/remini";
+    const rem = await axios.get(
+      `${REMINI_URL}?image=${encodeURIComponent(imageUrl)}&apikey=${API_KEY}`,
+      { timeout: 45000, validateStatus: s => s >= 200 && s < 500 }
+    );
+
+    const enhancedUrl =
+      rem?.data?.data?.url ||
+      rem?.data?.result?.url ||
+      rem?.data?.url ||
+      null;
+
+    if (!rem?.data?.status || !enhancedUrl) {
+      const reason = rem?.data?.message || "La API no devolvió una imagen mejorada.";
+      throw new Error(reason);
+    }
+
+    // 4) Enviar imagen mejorada (por URL)
     await conn.sendMessage(chatId, {
-      image: { url: rem.data.data.url },
-      caption: '✨ Imagen mejorada con éxito por *La Suki Bot*'
+      image: { url: enhancedUrl },
+      caption: "✨ Imagen mejorada con éxito por *La Suki Bot*"
     }, { quoted: msg });
-    await conn.sendMessage(chatId, { react: { text: '✅', key: msg.key } });
+
+    try { await conn.sendMessage(chatId, { react: { text: "✅", key: msg.key } }); } catch {}
 
   } catch (e) {
-    console.error('❌ Error en comando .hd:', e);
+    console.error("❌ Error en .hd:", e);
+    try { await conn.sendMessage(chatId, { react: { text: "❌", key: msg.key } }); } catch {}
     await conn.sendMessage(chatId, {
-      text: `❌ *Error:* ${e.message}`
+      text: `❌ *Error:* ${e?.message || "Fallo desconocido."}`
     }, { quoted: msg });
-    await conn.sendMessage(chatId, { react: { text: '❌', key: msg.key } });
+  } finally {
+    if (tmpFile) {
+      try { fs.unlinkSync(tmpFile); } catch {}
+    }
   }
 };
 
-handler.command = ['hd'];
-handler.help    = ['hd'];
-handler.tags    = ['tools'];
-handler.register= true;
-module.exports  = handler;
-
+handler.command  = ["hd"];
+handler.help     = ["hd"];
+handler.tags     = ["tools"];
+handler.register = true;
+module.exports   = handler;
