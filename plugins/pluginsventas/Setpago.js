@@ -59,6 +59,32 @@ function getQuotedText(msg) {
   );
 }
 
+/** Desencapsula viewOnce/ephemeral */
+function unwrapMessage(m) {
+  let node = m;
+  while (
+    node?.viewOnceMessage?.message ||
+    node?.viewOnceMessageV2?.message ||
+    node?.viewOnceMessageV2Extension?.message ||
+    node?.ephemeralMessage?.message
+  ) {
+    node =
+      node.viewOnceMessage?.message ||
+      node.viewOnceMessageV2?.message ||
+      node.viewOnceMessageV2Extension?.message ||
+      node.ephemeralMessage?.message;
+  }
+  return node;
+}
+
+/** Asegura acceso a wa.downloadContentFromMessage */
+function ensureWA(wa, conn) {
+  if (wa && typeof wa.downloadContentFromMessage === "function") return wa;
+  if (conn && conn.wa && typeof conn.wa.downloadContentFromMessage === "function") return conn.wa;
+  if (global.wa && typeof global.wa.downloadContentFromMessage === "function") return global.wa;
+  return null;
+}
+
 const handler = async (msg, { conn, text, args, wa }) => {
   const chatId    = msg.key.remoteJid;
   const isGroup   = chatId.endsWith("@g.us");
@@ -85,9 +111,11 @@ const handler = async (msg, { conn, text, args, wa }) => {
   // Si no escribió texto, usamos el del mensaje citado (si existe).
   const quotedText = !textoCrudo ? getQuotedText(msg) : null;
 
-  // Imagen citada opcional
-  const ctx = msg.message?.extendedTextMessage?.contextInfo;
-  const quotedImage = ctx?.quotedMessage?.imageMessage;
+  // Imagen citada opcional (desencapsulada)
+  const ctx  = msg.message?.extendedTextMessage?.contextInfo;
+  const qRaw = ctx?.quotedMessage;
+  const inner = qRaw ? unwrapMessage(qRaw) : null;
+  const quotedImage = inner?.imageMessage;
 
   if (!textoCrudo && !quotedText && !quotedImage) {
     return conn.sendMessage(chatId, {
@@ -95,14 +123,23 @@ const handler = async (msg, { conn, text, args, wa }) => {
     }, { quoted: msg });
   }
 
-  // Procesar imagen
+  // Asegurar wa
+  const WA = ensureWA(wa, conn);
+
+  // Cargar JSON primero para poder preservar imagen previa si no envían nueva
+  const filePath = "./ventas365.json";
+  let ventas = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf-8")) : {};
+  if (!ventas[chatId]) ventas[chatId] = {};
+  const prev = ventas[chatId]["setpago"] || {};
+
+  // Procesar imagen (si viene citada)
   let imagenBase64 = null;
-  if (quotedImage) {
+  if (quotedImage && WA) {
     try {
-      const stream = await wa.downloadContentFromMessage(quotedImage, "image");
+      const stream = await WA.downloadContentFromMessage(quotedImage, "image");
       let buffer = Buffer.alloc(0);
       for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
-      imagenBase64 = buffer.toString("base64");
+      if (buffer.length) imagenBase64 = buffer.toString("base64");
     } catch (e) {
       console.error("[setpago] error leyendo imagen citada:", e);
     }
@@ -110,13 +147,10 @@ const handler = async (msg, { conn, text, args, wa }) => {
 
   const textoFinal = (textoCrudo || quotedText || "");
 
-  const filePath = "./ventas365.json";
-  let ventas = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf-8")) : {};
-  if (!ventas[chatId]) ventas[chatId] = {};
-
+  // Guardar (conserva imagen previa si no hay nueva)
   ventas[chatId]["setpago"] = {
-    texto: textoFinal,     // 👈 guardado EXACTO (con \n y espacios)
-    imagen: imagenBase64   // null si no hay imagen
+    texto: textoFinal,                       // EXACTO (con \n y espacios)
+    imagen: imagenBase64 ?? prev.imagen ?? null
   };
 
   fs.writeFileSync(filePath, JSON.stringify(ventas, null, 2));
