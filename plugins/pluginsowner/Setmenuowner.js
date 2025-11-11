@@ -1,7 +1,6 @@
 // plugins/setmenuowner.js
 const fs = require("fs");
 const path = require("path");
-const { downloadContentFromMessage } = require("@whiskeysockets/baileys");
 
 const DIGITS = (s = "") => String(s).replace(/\D/g, "");
 
@@ -10,24 +9,49 @@ function isOwnerByNumber(num) {
   return Array.isArray(global.owner) && global.owner.some(([id]) => id === num);
 }
 
-/** Texto del mensaje citado (mantiene saltos/espacios) */
+/** Desencapsula viewOnce/ephemeral y retorna el nodo interno */
+function unwrapMessage(m) {
+  let node = m;
+  while (
+    node?.viewOnceMessage?.message ||
+    node?.viewOnceMessageV2?.message ||
+    node?.viewOnceMessageV2Extension?.message ||
+    node?.ephemeralMessage?.message
+  ) {
+    node =
+      node.viewOnceMessage?.message ||
+      node.viewOnceMessageV2?.message ||
+      node.viewOnceMessageV2Extension?.message ||
+      node.ephemeralMessage?.message;
+  }
+  return node;
+}
+
+/** Texto del citado (preserva saltos/espacios) */
 function getQuotedText(msg) {
   const q = msg?.message?.extendedTextMessage?.contextInfo?.quotedMessage;
   if (!q) return null;
-  return (
-    q.conversation ||
-    q?.extendedTextMessage?.text ||
-    q?.ephemeralMessage?.message?.conversation ||
-    q?.ephemeralMessage?.message?.extendedTextMessage?.text ||
-    q?.viewOnceMessageV2?.message?.conversation ||
-    q?.viewOnceMessageV2?.message?.extendedTextMessage?.text ||
-    q?.viewOnceMessageV2Extension?.message?.conversation ||
-    q?.viewOnceMessageV2Extension?.message?.extendedTextMessage?.text ||
-    null
-  );
+  const inner = unwrapMessage(q);
+  return inner?.conversation || inner?.extendedTextMessage?.text || null;
 }
 
-const handler = async (msg, { conn, args, text }) => {
+/** Imagen del citado (soporta viewOnce/ephemeral) */
+function getQuotedImageMessage(msg) {
+  const q = msg?.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+  if (!q) return null;
+  const inner = unwrapMessage(q);
+  return inner?.imageMessage || null;
+}
+
+/** Obtiene wa.downloadContentFromMessage desde donde esté inyectado */
+function ensureWA(wa, conn) {
+  if (wa && typeof wa.downloadContentFromMessage === "function") return wa;
+  if (conn && conn.wa && typeof conn.wa.downloadContentFromMessage === "function") return conn.wa;
+  if (global.wa && typeof global.wa.downloadContentFromMessage === "function") return global.wa;
+  return null;
+}
+
+const handler = async (msg, { conn, args, text, wa }) => {
   const chatId    = msg.key.remoteJid;
   const senderJid = msg.key.participant || msg.key.remoteJid;
   const senderNum = DIGITS(senderJid);
@@ -43,16 +67,13 @@ const handler = async (msg, { conn, args, text }) => {
     }, { quoted: msg });
   }
 
-  // ✏️ Texto crudo (no recortar)
+  // ✏️ Texto crudo (no recortar; quita solo un espacio inicial si viene)
   const textoArg  = typeof text === "string" ? text : (Array.isArray(args) ? args.join(" ") : "");
   const textoUser = textoArg.startsWith(" ") ? textoArg.slice(1) : textoArg;
 
-  // Contexto posible imagen citada
-  const ctx = msg.message?.extendedTextMessage?.contextInfo;
-  const quotedImage = ctx?.quotedMessage?.imageMessage;
-
-  // Si no hay texto, intentar tomar del citado
-  const quotedText = !textoUser ? getQuotedText(msg) : null;
+  // Extraer posibles contenidos del citado
+  const quotedText  = !textoUser ? getQuotedText(msg) : null;
+  const quotedImage = getQuotedImageMessage(msg);
 
   if (!textoUser && !quotedText && !quotedImage) {
     try { await conn.sendMessage(chatId, { react: { text: "❌", key: msg.key } }); } catch {}
@@ -65,10 +86,12 @@ const handler = async (msg, { conn, args, text }) => {
   let imagenBase64 = null;
   if (quotedImage) {
     try {
-      const stream = await downloadContentFromMessage(quotedImage, "image");
+      const WA = ensureWA(wa, conn);
+      if (!WA) throw new Error("downloadContentFromMessage no disponible");
+      const stream = await WA.downloadContentFromMessage(quotedImage, "image");
       let buffer = Buffer.alloc(0);
       for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
-      imagenBase64 = buffer.toString("base64");
+      if (buffer.length) imagenBase64 = buffer.toString("base64");
     } catch (e) {
       console.error("[setmenuowner] error leyendo imagen citada:", e);
     }
@@ -78,10 +101,15 @@ const handler = async (msg, { conn, args, text }) => {
 
   // 💾 Guardar en setmenu.json (global)
   const filePath = path.resolve("./setmenu.json");
-  const data = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf-8")) : {};
+  let data = {};
+  try { data = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf-8")) : {}; } catch {}
 
-  data.texto_owner  = textoFinal;      // texto exacto
-  data.imagen_owner = imagenBase64;    // null si no hay
+  // Si no envían texto esta vez, mantiene el anterior
+  data.texto_owner = textoFinal || data.texto_owner || "";
+  // Solo sobrescribe imagen si vino una nueva
+  if (imagenBase64 !== null) data.imagen_owner = imagenBase64;
+
+  data.updatedAt_owner = Date.now();
 
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 
@@ -92,5 +120,4 @@ const handler = async (msg, { conn, args, text }) => {
 handler.command = ["setmenuowner"];
 handler.tags = ["menu"];
 handler.help = ["setmenuowner <texto> (o respondiendo a imagen)"];
-
 module.exports = handler;
