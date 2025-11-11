@@ -1,6 +1,5 @@
 const fs = require("fs");
 const path = require("path");
-const { downloadContentFromMessage } = require("@whiskeysockets/baileys");
 
 // ——— Helpers LID-aware ———
 const DIGITS = (s = "") => String(s).replace(/\D/g, "");
@@ -43,24 +42,49 @@ async function isAdminByNumber(conn, chatId, number) {
   }
 }
 
-/** Extrae texto de un mensaje citado (manteniendo saltos/espacios) */
+/** Desencapsula viewOnce/ephemeral y retorna el mensaje interno real */
+function unwrapMessage(m) {
+  let node = m;
+  while (
+    node?.viewOnceMessage?.message ||
+    node?.viewOnceMessageV2?.message ||
+    node?.viewOnceMessageV2Extension?.message ||
+    node?.ephemeralMessage?.message
+  ) {
+    node =
+      node.viewOnceMessage?.message ||
+      node.viewOnceMessageV2?.message ||
+      node.viewOnceMessageV2Extension?.message ||
+      node.ephemeralMessage?.message;
+  }
+  return node;
+}
+
+/** Extrae texto del mensaje citado (manteniendo saltos/espacios) */
 function getQuotedText(msg) {
   const q = msg?.message?.extendedTextMessage?.contextInfo?.quotedMessage;
   if (!q) return null;
-  return (
-    q.conversation ||
-    q?.extendedTextMessage?.text ||
-    q?.ephemeralMessage?.message?.conversation ||
-    q?.ephemeralMessage?.message?.extendedTextMessage?.text ||
-    q?.viewOnceMessageV2?.message?.conversation ||
-    q?.viewOnceMessageV2?.message?.extendedTextMessage?.text ||
-    q?.viewOnceMessageV2Extension?.message?.conversation ||
-    q?.viewOnceMessageV2Extension?.message?.extendedTextMessage?.text ||
-    null
-  );
+  const inner = unwrapMessage(q);
+  return inner?.conversation || inner?.extendedTextMessage?.text || null;
 }
 
-const handler = async (msg, { conn, text, args }) => {
+/** Extrae imageMessage del citado (soporta ephemeral/viewOnce) */
+function getQuotedImageMessage(msg) {
+  const q = msg?.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+  if (!q) return null;
+  const inner = unwrapMessage(q);
+  return inner?.imageMessage || null;
+}
+
+/** Asegura acceso a wa.downloadContentFromMessage inyectado */
+function ensureWA(wa, conn) {
+  if (wa && typeof wa.downloadContentFromMessage === "function") return wa;
+  if (conn && conn.wa && typeof conn.wa.downloadContentFromMessage === "function") return conn.wa;
+  if (global.wa && typeof global.wa.downloadContentFromMessage === "function") return global.wa;
+  return null;
+}
+
+const handler = async (msg, { conn, text, args, wa }) => {
   const chatId    = msg.key.remoteJid;
   const isGroup   = chatId.endsWith("@g.us");
   const senderJid = msg.key.participant || msg.key.remoteJid; // puede ser @lid
@@ -82,16 +106,14 @@ const handler = async (msg, { conn, text, args }) => {
   }
 
   // ——— Texto crudo (preserva saltos/espacios) ———
-  // Si tu dispatcher ya pasa "text" crudo, lo usamos. Quitamos SOLO un espacio inicial tras el comando.
   const rawFromDispatcher = typeof text === "string" ? text : "";
   const textoCrudo = rawFromDispatcher.startsWith(" ") ? rawFromDispatcher.slice(1) : rawFromDispatcher;
 
   // Además, si el user respondió a un texto, podemos usarlo (solo si no escribió nada tras el comando)
   const quotedText = !textoCrudo ? getQuotedText(msg) : null;
 
-  // Imagen citada (opcional)
-  const ctx = msg.message?.extendedTextMessage?.contextInfo;
-  const quotedImage = ctx?.quotedMessage?.imageMessage;
+  // Imagen citada (opcional; soporta viewOnce/ephemeral)
+  const quotedImage = getQuotedImageMessage(msg);
 
   if (!textoCrudo && !quotedText && !quotedImage) {
     return conn.sendMessage(chatId, {
@@ -103,12 +125,13 @@ const handler = async (msg, { conn, text, args }) => {
   let imagenBase64 = null;
   if (quotedImage) {
     try {
-      const stream = await downloadContentFromMessage(quotedImage, "image");
+      const WA = ensureWA(wa, conn);
+      if (!WA) throw new Error("downloadContentFromMessage no disponible");
+      const stream = await WA.downloadContentFromMessage(quotedImage, "image");
       let buffer = Buffer.alloc(0);
       for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
-      imagenBase64 = buffer.toString("base64");
+      if (buffer.length) imagenBase64 = buffer.toString("base64");
     } catch (e) {
-      // No rompemos si falla la imagen; seguimos guardando el texto
       console.error("[setreglas] error leyendo imagen citada:", e);
     }
   }
@@ -121,8 +144,8 @@ const handler = async (msg, { conn, text, args }) => {
   if (!ventas[chatId]) ventas[chatId] = {};
 
   ventas[chatId]["setreglas"] = {
-    texto: textoFinal,   // 👈 se guarda tal cual (con \n, espacios, etc.)
-    imagen: imagenBase64 // puede ser null si no se citó imagen
+    texto: textoFinal,   // tal cual (con \n y espacios)
+    imagen: imagenBase64 // base64 o null
   };
 
   fs.writeFileSync(filePath, JSON.stringify(ventas, null, 2));
