@@ -1,6 +1,6 @@
 // plugins/p.js
 // Comando: .p
-// Muestra capacidad y uso del servidor (RAM, CPU, Disco, uptime).
+// Muestra capacidad y uso del servidor (RAM, CPU, TODOS los discos, uptime).
 // Reacciona al usar el comando y responde citando el mensaje original.
 // Nota: el bot está alojado en "Sky Ultra Plus" (informativo).
 
@@ -31,7 +31,12 @@ function sampleCpuPercent(ms = 400) {
       for (let i = 0; i < a.length; i++) {
         const at = a[i], bt = b[i];
         const idleDelta = bt.idle - at.idle;
-        const totalDelta = (bt.user - at.user) + (bt.nice - at.nice) + (bt.sys - at.sys) + (bt.irq - at.irq) + idleDelta;
+        const totalDelta =
+          (bt.user - at.user) +
+          (bt.nice - at.nice) +
+          (bt.sys - at.sys) +
+          (bt.irq - at.irq) +
+          idleDelta;
         idle += idleDelta;
         total += totalDelta;
       }
@@ -41,29 +46,42 @@ function sampleCpuPercent(ms = 400) {
   });
 }
 
-// Info de disco del punto de montaje raíz usando `df` (Linux/Unix)
-function getDiskInfo() {
+// Info de TODOS los discos usando `df` (Linux/Unix)
+function getDisksInfo() {
   return new Promise((resolve) => {
-    // -P para formato POSIX estable
-    exec("df -kP /", (err, stdout) => {
-      if (err || !stdout) {
-        // Fallback: sin disco
-        return resolve(null);
-      }
+    // -P formato POSIX estable
+    // -x tmpfs/devtmpfs para excluir sistemas en RAM
+    exec("df -kP -x tmpfs -x devtmpfs", (err, stdout) => {
+      if (err || !stdout) return resolve([]);
+
       const lines = stdout.trim().split("\n");
-      if (lines.length < 2) return resolve(null);
-      const parts = lines[1].split(/\s+/); // Filesystem 1024-blocks Used Available Capacity Mounted
-      // En algunos sistemas la columna 5 es '%'
-      const totalKB = parseInt(parts[1], 10);
-      const usedKB  = parseInt(parts[2], 10);
-      const availKB = parseInt(parts[3], 10);
-      const usedPct = parts[4] || "";
-      resolve({
-        total: totalKB * 1024,
-        used: usedKB * 1024,
-        avail: availKB * 1024,
-        usedPct: usedPct.includes("%") ? usedPct : null
-      });
+      if (lines.length < 2) return resolve([]);
+
+      const disks = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const parts = lines[i].trim().split(/\s+/);
+        // Esperado: Filesystem 1024-blocks Used Available Capacity Mounted
+        if (parts.length < 6) continue;
+
+        const fs       = parts[0];
+        const totalKB  = parseInt(parts[1], 10);
+        const usedKB   = parseInt(parts[2], 10);
+        const availKB  = parseInt(parts[3], 10);
+        const usedPct  = parts[4];
+        const mount    = parts[5];
+
+        disks.push({
+          fs,
+          mount,
+          total:  totalKB * 1024,
+          used:   usedKB * 1024,
+          avail:  availKB * 1024,
+          usedPct: usedPct && usedPct.includes("%") ? usedPct : null,
+        });
+      }
+
+      resolve(disks);
     });
   });
 }
@@ -90,8 +108,8 @@ module.exports = async (msg, { conn }) => {
   // % CPU (muestreo corto)
   const cpuPercent = await sampleCpuPercent(400);
 
-  // Disco
-  const disk = await getDiskInfo();
+  // Discos (TODOS)
+  const disks = await getDisksInfo();
 
   // Uptime
   const upSec = os.uptime();
@@ -106,7 +124,7 @@ module.exports = async (msg, { conn }) => {
   const platform = `${os.platform()} ${os.release()}`;
   const nodev = process.version;
 
-  // Armado de texto
+  // Armado de texto base
   let texto =
 `🖥️ *Estado del Servidor* (Sky Ultra Plus)
 🏷️ Host: *${host}*
@@ -124,14 +142,22 @@ module.exports = async (msg, { conn }) => {
 • Carga (1/5/15m): ${num(l1)} / ${num(l5)} / ${num(l15)}
 • Uso aprox.: ${num(cpuPercent)}%
 ────────────────
-💾 *Disco (/)*`;
+💾 *Discos (df)*`;
 
-  if (disk) {
-    const t = disk.total, u = disk.used, a = disk.avail;
-    const p = disk.usedPct || pct(u, t);
-    texto += `\n• Capacidad: ${formatBytes(t)}\n• Usado: ${formatBytes(u)}  (${p})\n• Libre: ${formatBytes(a)}`;
+  if (disks.length > 0) {
+    for (const dsk of disks) {
+      const t = dsk.total;
+      const u = dsk.used;
+      const a = dsk.avail;
+      const p = dsk.usedPct || pct(u, t);
+
+      texto += `\n• *${dsk.mount}* (${dsk.fs})
+  - Capacidad: ${formatBytes(t)}
+  - Usado: ${formatBytes(u)}  (${p})
+  - Libre: ${formatBytes(a)}`;
+    }
   } else {
-    texto += `\n• No disponible (sin 'df')`;
+    texto += `\n• No disponible (sin 'df' o sin datos)`;
   }
 
   texto += `\n────────────────
