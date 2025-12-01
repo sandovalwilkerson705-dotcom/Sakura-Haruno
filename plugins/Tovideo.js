@@ -10,7 +10,7 @@ const { promisify } = require("util");
 const { pipeline } = require("stream");
 const streamPipeline = promisify(pipeline);
 
-const CDN_ENDPOINT = "https://cdn.skyultraplus.com/upload.php";
+const CDN_ENDPOINT = "https://cdn.russellxz.click";
 const NEOXR_URL    = "https://api.neoxr.eu/api/webp2mp4";
 const NEOXR_KEY    = "russellxz";
 
