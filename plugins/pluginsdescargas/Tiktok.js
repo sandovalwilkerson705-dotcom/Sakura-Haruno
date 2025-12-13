@@ -1,9 +1,10 @@
+
 // comandos/tt.js — TikTok con opciones (👍 video / ❤️ documento o 1 / 2)
-// Usa tu API Sky: https://api-sky.ultraplus.click
+// Usa tu API: POST /tiktok
 const axios = require("axios");
 
-const API_BASE = process.env.API_BASE || "https://api-russell-test.ultraplus.click/tiktok";
-const API_KEY  = process.env.API_KEY  || "sk_732a209b-322a-47b3-8ce0-965aa13a7024"; // tu key
+const API_BASE = process.env.API_BASE || "https://api-russell-test.ultraplus.click";
+const API_KEY  = process.env.API_KEY  || "sk_732a209b-322a-47b3-8ce0-965aa13a7024";
 const MAX_TIMEOUT = 25000;
 
 const fmtSec = (s) => {
@@ -14,24 +15,44 @@ const fmtSec = (s) => {
   return (h ? `${h}:` : "") + `${m.toString().padStart(2,"0")}:${sec.toString().padStart(2,"0")}`;
 };
 
-// jobs pendientes por id del mensaje de opciones
 const pendingTT = Object.create(null);
 
 async function getTikTokFromSky(url){
-  const { data: res, status: http } = await axios.get(
-    `${API_BASE}/api/download/tiktok.php`,
+  // ✅ endpoint correcto: POST /tiktok
+  const { data: res, status: http } = await axios.post(
+    `${API_BASE}/tiktok`,
+    { url },
     {
-      params: { url },
-      headers: { Authorization: `Bearer ${API_KEY}` },
+      headers: {
+        // ✅ tu middleware acepta apikey o Authorization
+        apikey: API_KEY,
+        Authorization: `Bearer ${API_KEY}`,
+        "Content-Type": "application/json",
+      },
       timeout: MAX_TIMEOUT,
       validateStatus: s => s >= 200 && s < 600
     }
   );
-  if (http !== 200) throw new Error(`HTTP ${http}${res?.error ? ` - ${res.error}` : ""}`);
-  if (!res || res.status !== "true" || !res.data?.video) {
-    throw new Error(res?.error || "La API no devolvió un video válido.");
+
+  if (http !== 200) throw new Error(`HTTP ${http}${res?.message ? ` - ${res.message}` : ""}`);
+
+  // ✅ formato real de tu API: { status: true, result: {...} }
+  if (!res || res.status !== true || !res.result?.media?.video) {
+    throw new Error(res?.message || "La API no devolvió un video válido.");
   }
-  return res.data; // { title, author, duration, likes, comments, video, audio? }
+
+  const r = res.result;
+
+  return {
+    title: r.title || "TikTok",
+    author: r.author || {},
+    duration: r.duration || 0,
+    likes: r.stats?.likes ?? 0,
+    comments: r.stats?.comments ?? 0,
+    video: r.media.video,
+    audio: r.media.audio || null,
+    cover: r.media.cover || null,
+  };
 }
 
 const handler = async (msg, { conn, args, command }) => {
@@ -42,7 +63,7 @@ const handler = async (msg, { conn, args, command }) => {
   if (!text) {
     return conn.sendMessage(chatId, {
       text:
-`✳️ 𝙐𝙨𝙖:
+`✳️ Usa:
 ${pref}${command} <enlace>
 Ej: ${pref}${command} https://vm.tiktok.com/xxxxxx/`
     }, { quoted: msg });
@@ -50,13 +71,13 @@ Ej: ${pref}${command} https://vm.tiktok.com/xxxxxx/`
 
   const url = args[0];
   if (!/^https?:\/\//i.test(url) || !/tiktok\.com|vt\.tiktok\.com|vm\.tiktok\.com/i.test(url)) {
-    return conn.sendMessage(chatId, { text: "❌ 𝙀𝙣𝙡𝙖𝙘𝙚 𝙙𝙚 𝙏𝙞𝙠𝙏𝙤𝙠 𝙞𝙣𝙫𝙖́𝙡𝙞𝙙𝙤." }, { quoted: msg });
+    return conn.sendMessage(chatId, { text: "❌ Enlace de TikTok inválido." }, { quoted: msg });
   }
 
   try {
     await conn.sendMessage(chatId, { react: { text: "⏱️", key: msg.key } });
 
-    // 1) Llama a tu Sky API (solo 1 video)
+    // 1) Llama a tu API
     const d = await getTikTokFromSky(url);
 
     const title   = d.title || "TikTok";
@@ -65,47 +86,45 @@ Ej: ${pref}${command} https://vm.tiktok.com/xxxxxx/`
     const likes   = d.likes ?? 0;
     const comments= d.comments ?? 0;
 
-    // 2) Mensaje de opciones (reacciones / números)
     const txt =
-`⚡ 𝗧𝗶𝗸𝗧𝗼𝗸 — 𝗼𝗽𝗰𝗶𝗼𝗻𝗲𝘀
+`⚡ TikTok — opciones
 
 Elige cómo enviarlo:
-👍 𝗩𝗶𝗱𝗲𝗼 (normal)
-❤️ 𝗩𝗶𝗱𝗲𝗼 𝗰𝗼𝗺𝗼 𝗱𝗼𝗰𝘂𝗺𝗲𝗻𝘁𝗼
-— 𝗼 responde: 1 = video · 2 = documento
+👍 Video (normal)
+❤️ Video como documento
+— o responde: 1 = video · 2 = documento
 
-✦ 𝗧𝗶́𝘁𝘂𝗹𝗼: ${title}
-✦ 𝗔𝘂𝘁𝗼𝗿: ${author}
-✦ 𝗗𝘂𝗿.: ${durTxt} • 👍 ${likes} · 💬 ${comments}
-✦ 𝗦𝗼𝘂𝗿𝗰𝗲: api-sky.ultraplus.click
+✦ Título: ${title}
+✦ Autor: ${author}
+✦ Dur.: ${durTxt} • 👍 ${likes} · 💬 ${comments}
+✦ Source: ${API_BASE}
 ────────────
-🤖 𝙎𝙪𝙠𝙞 𝘽𝙤𝙩`;
+🤖 Suki Bot`;
 
     const preview = await conn.sendMessage(chatId, { text: txt }, { quoted: msg });
 
-    // guarda el trabajo
     pendingTT[preview.key.id] = {
       chatId,
       url: d.video,
       caption:
-`⚡ 𝗧𝗶𝗸𝗧𝗼𝗸 — 𝘃𝗶𝗱𝗲𝗼 𝗹𝗶𝘀𝘁𝗼
+`⚡ TikTok listo
 
-✦ 𝗧𝗶́𝘁𝘂𝗹𝗼: ${title}
-✦ 𝗔𝘂𝘁𝗼𝗿: ${author}
-✦ 𝗗𝘂𝗿𝗮𝗰𝗶𝗼́𝗻: ${durTxt}
-✦ 𝗟𝗶𝗸𝗲𝘀: ${likes}  •  𝗖𝗼𝗺𝗲𝗻𝘁𝗮𝗿𝗶𝗼𝘀: ${comments}
+✦ Título: ${title}
+✦ Autor: ${author}
+✦ Duración: ${durTxt}
+✦ Likes: ${likes} • Comentarios: ${comments}
 
-✦ 𝗦𝗼𝘂𝗿𝗰𝗲: api-sky.ultraplus.click
+✦ Source: ${API_BASE}
 ────────────
-🤖 𝙎𝙪𝙠𝙞 𝘽𝙤𝙩`,
+🤖 Suki Bot`,
       quotedBase: msg
     };
 
     await conn.sendMessage(chatId, { react: { text: "✅", key: msg.key } });
 
-    // 3) Listener único para TT
     if (!conn._ttListener) {
       conn._ttListener = true;
+
       conn.ev.on("messages.upsert", async ev => {
         for (const m of ev.messages) {
           try {
@@ -120,7 +139,7 @@ Elige cómo enviarlo:
               }
             }
 
-            // RESPUESTAS con número 1/2
+            // RESPUESTAS 1/2
             const ctx = m.message?.extendedTextMessage?.contextInfo;
             const replyTo = ctx?.stanzaId;
             const textLow =
@@ -158,8 +177,8 @@ Elige cómo enviarlo:
 
 async function sendTikTok(conn, job, asDocument, triggerMsg){
   const { chatId, url, caption, quotedBase } = job;
+
   await conn.sendMessage(chatId, { react: { text: asDocument ? "📁" : "🎬", key: triggerMsg.key } });
-  await conn.sendMessage(chatId, { text: `⏳ Enviando ${asDocument ? "como documento" : "video"}…` }, { quoted: quotedBase });
 
   if (asDocument) {
     await conn.sendMessage(chatId, {
