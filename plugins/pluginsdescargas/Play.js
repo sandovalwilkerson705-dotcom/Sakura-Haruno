@@ -8,9 +8,9 @@ const { promisify } = require("util");
 const { pipeline } = require("stream");
 const streamPipe = promisify(pipeline);
 
-// ==== CONFIG DE TU API ====
-const API_BASE = process.env.API_BASE || "https://api-sky.ultraplus.click";
-const API_KEY  = process.env.API_KEY  || "LBugJUD2BdBP"; // <-- tu API Key
+// ==== NUEVA CONFIG DE API ====
+const API_BASE = process.env.API_BASE || "https://api-adonix.ultraplus.click";
+const API_KEY  = process.env.API_KEY  || "DemonKeytechbot"; // <-- tu nueva API Key
 
 // Almacena tareas pendientes por previewMessageId
 const pending = {};
@@ -28,18 +28,59 @@ function fileSizeMB(filePath) {
   return b / (1024 * 1024);
 }
 
-// Llama a tu API /api/download/yt.php
-async function callMyApi(url, format) {
-  const r = await axios.get(`${API_BASE}/api/download/yt.php`, {
-    params: { url, format }, // format: 'audio' | 'video'
-    headers: { Authorization: `Bearer ${API_KEY}` },
-    timeout: 60000
-  });
-  // Estructura esperada: { status:'true', data:{ title, audio, video, thumbnail, ... } }
-  if (!r.data || r.data.status !== "true" || !r.data.data) {
-    throw new Error("API inválida o sin datos");
+// Llama a la NUEVA API para audio
+async function callMyApiAudio(url) {
+  try {
+    const r = await axios.get(`${API_BASE}/download/ytaudio`, {
+      params: { 
+        url: url,
+        apikey: API_KEY
+      },
+      timeout: 60000
+    });
+    
+    // Estructura esperada de la nueva API
+    if (!r.data || !r.data.success) {
+      throw new Error(r.data.message || "Error en la API de audio");
+    }
+    
+    return {
+      url: r.data.result || r.data.downloadUrl,
+      title: r.data.title || "Audio YouTube",
+      duration: r.data.duration || "00:00"
+    };
+  } catch (error) {
+    console.error("Error API audio:", error.message);
+    throw new Error(`API Audio: ${error.message}`);
   }
-  return r.data.data;
+}
+
+// Llama a la NUEVA API para video
+async function callMyApiVideo(url) {
+  try {
+    const r = await axios.get(`${API_BASE}/download/ytvideo`, {
+      params: { 
+        url: url,
+        apikey: API_KEY
+      },
+      timeout: 60000
+    });
+    
+    // Estructura esperada de la nueva API
+    if (!r.data || !r.data.success) {
+      throw new Error(r.data.message || "Error en la API de video");
+    }
+    
+    return {
+      url: r.data.result || r.data.downloadUrl,
+      title: r.data.title || "Video YouTube",
+      duration: r.data.duration || "00:00",
+      quality: r.data.quality || "720p"
+    };
+  } catch (error) {
+    console.error("Error API video:", error.message);
+    throw new Error(`API Video: ${error.message}`);
+  }
 }
 
 module.exports = async (msg, { conn, text }) => {
@@ -62,6 +103,9 @@ module.exports = async (msg, { conn, text }) => {
   const res = await yts(text);
   const video = res.videos?.[0];
   if (!video) {
+    await conn.sendMessage(msg.key.remoteJid, {
+      react: { text: "❌", key: msg.key }
+    });
     return conn.sendMessage(
       msg.key.remoteJid,
       { text: "❌ Sin resultados." },
@@ -81,7 +125,7 @@ module.exports = async (msg, { conn, text }) => {
 ❥ 𝑽𝒊𝒔𝒕𝒂𝒔: ${viewsFmt}
 ❥ 𝑨𝒖𝒕𝒐𝒓: ${author?.name || author || "Desconocido"}
 ❥ 𝑳𝒊𝒏𝒌: ${videoUrl}
-❥ API: api-sky.ultraplus.click
+❥ API: api-adonix.ultraplus.click
 
 📥 𝙾𝚙𝚌𝚒𝚘𝚗𝚎𝚜 𝚍𝚎 𝙳𝚎𝚜𝚌𝚊𝚛𝚐𝚊 (reacciona o responde al mensaje):
 ☛ 👍 Audio MP3     (1 / audio)
@@ -192,99 +236,86 @@ async function handleDownload(conn, job, choice) {
 async function downloadAudio(conn, job, asDocument, quoted) {
   const { chatId, videoUrl, title } = job;
 
-  // 1) Pide a TU API audio (descuenta soli en servidor)
-  const data = await callMyApi(videoUrl, "audio");
-  const mediaUrl = data.audio || data.video; // fallback si el upstream devolviera solo video
+  try {
+    // 1) Pide a la NUEVA API de audio
+    const data = await callMyApiAudio(videoUrl);
+    const mediaUrl = data.url;
 
-  if (!mediaUrl) throw new Error("No se pudo obtener audio");
+    if (!mediaUrl) throw new Error("No se pudo obtener URL de audio");
 
-  // 2) Descarga + (opcional) convierte a MP3 si no es mp3/mpeg
-  const tmp = path.join(__dirname, "../tmp");
-  if (!fs.existsSync(tmp)) fs.mkdirSync(tmp, { recursive: true });
+    // 2) Descarga
+    const tmp = path.join(__dirname, "../tmp");
+    if (!fs.existsSync(tmp)) fs.mkdirSync(tmp, { recursive: true });
 
-  // detecta extensión
-  const urlPath = new URL(mediaUrl).pathname || "";
-  const ext = (urlPath.split(".").pop() || "").toLowerCase();
-  const isMp3 = ext === "mp3";
+    const inFile = path.join(tmp, `${Date.now()}_audio.mp3`);
+    await downloadToFile(mediaUrl, inFile);
 
-  const inFile  = path.join(tmp, `${Date.now()}_in.${ext || "bin"}`);
-  await downloadToFile(mediaUrl, inFile);
-
-  let outFile = inFile;
-  if (!isMp3) {
-    // convertir a mp3 (si falla, mandamos el original como documento)
-    const tryOut = path.join(tmp, `${Date.now()}_out.mp3`);
-    try {
-      await new Promise((resolve, reject) =>
-        ffmpeg(inFile)
-          .audioCodec("libmp3lame")
-          .audioBitrate("128k")
-          .format("mp3")
-          .save(tryOut)
-          .on("end", resolve)
-          .on("error", reject)
-      );
-      outFile = tryOut;
-      // limpia entrada original
+    // 3) Límite ~99MB
+    const sizeMB = fileSizeMB(inFile);
+    if (sizeMB > 99) {
       try { fs.unlinkSync(inFile); } catch {}
-    } catch (e) {
-      // fallback: mandamos el original como documento de audio
-      outFile = inFile;
+      await conn.sendMessage(chatId, { text: `❌ El archivo de audio pesa ${sizeMB.toFixed(2)}MB (>99MB).` }, { quoted });
+      return;
     }
+
+    // 4) Enviar
+    const buffer = fs.readFileSync(inFile);
+    await conn.sendMessage(chatId, {
+      [asDocument ? "document" : "audio"]: buffer,
+      mimetype: "audio/mpeg",
+      fileName: `${title.replace(/[^\w\s.-]/gi, '')}.mp3`
+    }, { quoted });
+
+    try { fs.unlinkSync(inFile); } catch {}
+  } catch (error) {
+    console.error("Error descargando audio:", error);
+    await conn.sendMessage(chatId, { 
+      text: `❌ Error al descargar audio:\n${error.message}` 
+    }, { quoted });
   }
-
-  // 3) Límite ~99MB
-  const sizeMB = fileSizeMB(outFile);
-  if (sizeMB > 99) {
-    try { fs.unlinkSync(outFile); } catch {}
-    await conn.sendMessage(chatId, { text: `❌ El archivo de audio pesa ${sizeMB.toFixed(2)}MB (>99MB).` }, { quoted });
-    return;
-  }
-
-  // 4) Enviar
-  const buffer = fs.readFileSync(outFile);
-  await conn.sendMessage(chatId, {
-    [asDocument ? "document" : "audio"]: buffer,
-    mimetype: "audio/mpeg",
-    fileName: `${title}.mp3`
-  }, { quoted });
-
-  try { fs.unlinkSync(outFile); } catch {}
 }
 
 async function downloadVideo(conn, job, asDocument, quoted) {
   const { chatId, videoUrl, title } = job;
 
-  // 1) Pide a TU API video (descuenta soli en servidor)
-  const data = await callMyApi(videoUrl, "video");
-  const mediaUrl = data.video || data.audio; // fallback
+  try {
+    // 1) Pide a la NUEVA API de video
+    const data = await callMyApiVideo(videoUrl);
+    const mediaUrl = data.url;
 
-  if (!mediaUrl) throw new Error("No se pudo obtener video");
+    if (!mediaUrl) throw new Error("No se pudo obtener URL de video");
 
-  // 2) Descarga
-  const tmp = path.join(__dirname, "../tmp");
-  if (!fs.existsSync(tmp)) fs.mkdirSync(tmp, { recursive: true });
-  const file = path.join(tmp, `${Date.now()}_vid.mp4`);
-  await downloadToFile(mediaUrl, file);
+    // 2) Descarga
+    const tmp = path.join(__dirname, "../tmp");
+    if (!fs.existsSync(tmp)) fs.mkdirSync(tmp, { recursive: true });
+    
+    const file = path.join(tmp, `${Date.now()}_video.mp4`);
+    await downloadToFile(mediaUrl, file);
 
-  // 3) Límite ~99MB
-  const sizeMB = fileSizeMB(file);
-  if (sizeMB > 99) {
+    // 3) Límite ~99MB
+    const sizeMB = fileSizeMB(file);
+    if (sizeMB > 99) {
+      try { fs.unlinkSync(file); } catch {}
+      await conn.sendMessage(chatId, { text: `❌ El video pesa ${sizeMB.toFixed(2)}MB (>99MB).` }, { quoted });
+      return;
+    }
+
+    // 4) Enviar
+    await conn.sendMessage(chatId, {
+      [asDocument ? "document" : "video"]: fs.readFileSync(file),
+      mimetype: "video/mp4",
+      fileName: `${title.replace(/[^\w\s.-]/gi, '')}.mp4`,
+      caption: `🎬 𝐀𝐪𝐮𝐢́ 𝐭𝐢𝐞𝐧𝐞𝐬 𝐭𝐮 𝐯𝐢𝐝𝐞𝐨~ 💫\n• API: api-adonix.ultraplus.click\n© SAKURA HARUNO`
+    }, { quoted });
+
     try { fs.unlinkSync(file); } catch {}
-    await conn.sendMessage(chatId, { text: `❌ El video pesa ${sizeMB.toFixed(2)}MB (>99MB).` }, { quoted });
-    return;
+  } catch (error) {
+    console.error("Error descargando video:", error);
+    await conn.sendMessage(chatId, { 
+      text: `❌ Error al descargar video:\n${error.message}` 
+    }, { quoted });
   }
-
-  // 4) Enviar (solo añadí la línea de marca)
-  await conn.sendMessage(chatId, {
-    [asDocument ? "document" : "video"]: fs.readFileSync(file),
-    mimetype: "video/mp4",
-    fileName: `${title}.mp4`,
-    caption: `🎬 𝐀𝐪𝐮𝐢́ 𝐭𝐢𝐞𝐧𝐞𝐬 𝐭𝐮 𝐯𝐢𝐝𝐞𝐨~ 💫\n• API: api-sky.ultraplus.click\n© SAKURA HARUNO`
-  }, { quoted });
-
-  try { fs.unlinkSync(file); } catch {}
 }
 
-// 🔔 Solo cambié el nombre del comando aquí:
+// Comando
 module.exports.command = ["play"];
