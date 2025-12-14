@@ -54,7 +54,7 @@ const handler = async (msg, { conn, wa }) => {
     return conn.sendMessage(
       chatId,
       {
-        text: `⚠️ *Responde a una imagen o video para crear un sticker.*\n\n✳️ Ejemplo:\n${pref}s (respondiendo a una imagen)`,
+        text: `⚠️ *Bro y la imagen o el vídeo envíala*😂.*\n\n✳️ Ejemplo:\n${pref}s (respondiendo a una imagen)`,
       },
       { quoted: msg }
     );
@@ -77,8 +77,8 @@ const handler = async (msg, { conn, wa }) => {
     const fechaStr = `${fecha.getDate()}/${fecha.getMonth() + 1}/${fecha.getFullYear()} ${fecha.getHours()}:${fecha.getMinutes()}`;
 
     const metadata = {
-      packname: `✨ Lo Mandó Hacer: ${senderName}`,
-      author: `🦋Bot Creador: ❦La Suki 3.0 Bot❦\n🛠️ Desarrollado por: Russell XZ 💻\n📅 ${fechaStr}`,
+      packname: `🖤 Lo Mandó Hacer: ${senderName}`,
+      author: `🖤Bot : ❦Sakura haruno Bot❦\n🛠️ Desarrollado por: WILKER-OFC 💻\n📅 ${fechaStr}`,
     };
 
     const outSticker =
