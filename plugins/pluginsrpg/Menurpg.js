@@ -2,7 +2,7 @@ const handler = async (msg, { conn }) => {
   const chatId = msg.key.remoteJid;
   const pref = (global?.prefixes?.[0]) || (global?.prefix) || ".";
 
-  await conn.sendMessage2(chatId, { react: { text: "✨", key: msg.key } }, msg);
+  await conn.sendMessage2(chatId, { react: { text: "👻", key: msg.key } }, msg);
 
   const caption = `†𝙈𝙀𝙉𝙐 𝙍𝙋𝙂†
 
