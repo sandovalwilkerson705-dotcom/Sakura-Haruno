@@ -140,9 +140,8 @@ const handler = async (msg, { conn }) => {
 `.trim();
 
   await conn.sendMessage2(chatId, {
-    video: { url: "https://cdn.russellxz.click/483421f8.mp4" },
-    gifPlayback: true,
-    caption
+    image: { url: "https://cdn.russellxz.click/5615db7e.jpg" },
+    caption: caption
   }, msg);
 };
 
