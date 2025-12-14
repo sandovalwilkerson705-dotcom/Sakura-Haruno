@@ -21,16 +21,11 @@ Se están preparando dos versiones:
   ▸ Más ligera y sin sistema de subbots.
 
 📌 Puedes usar el comando ${pref}menu para descubrir mis funciones actuales y futuras.
-
-🎬 Para estar al tanto de noticias, actualizaciones y lanzamientos:
-🔗 *Sigue el canal de Sky Ultra Plus:*  
-https://youtube.com/@skyultraplus?si=4hnO5biMvrUu9JXY
-
 ╰────────────────╯
 `.trim();
 
   await conn.sendMessage(chatId, {
-    video: { url: 'https://cdn.russellxz.click/12fea11a.mp4' },
+    image: { url: 'https://cdn.russellxz.click/012aac15.jpg' },
     caption
   }, { quoted: msg });
 };
