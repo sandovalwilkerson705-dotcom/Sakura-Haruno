@@ -9,13 +9,9 @@ const handler = async (msg, { conn }) => {
 
   const caption = `
 *🌐INFORMACIÓN DEL BOT🌐*
-
-💫 *Este es un bot privado en desarrollo.*
-Actualmente está en *fase BETA* y *no está disponible al público*.  
-Se están preparando dos versiones:
-
+Sakura Haruno no contiene sistema subbots por el momento
 ❖ *Versión Privada:*  
-  ▸ Con sistema avanzado y estable de subbots.
+  ▸ Con sistema avanzado y estable
 
 ❖ *Versión Pública:*  
   ▸ Más ligera y sin sistema de subbots.
