@@ -109,7 +109,7 @@ const handler = async (msg, { conn, command, wa }) => {
     // 4) Enviar imagen mejorada (por URL)
     await conn.sendMessage(chatId, {
       image: { url: enhancedUrl },
-      caption: "✨ Imagen mejorada con éxito por *La Suki Bot*"
+      caption: "✨ Imagen mejorada con éxito por *Sakura Haruno*"
     }, { quoted: msg });
 
     try { await conn.sendMessage(chatId, { react: { text: "✅", key: msg.key } }); } catch {}
