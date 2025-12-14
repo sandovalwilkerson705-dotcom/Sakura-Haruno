@@ -10,7 +10,7 @@ const handler = async (msg, { conn, args }) => {
 
   if (args.length < 4) {
     return conn.sendMessage(chatId, {
-      text: `✳️ *Uso correcto:*\n.rpg Nombre Apellido Edad FechaNacimiento\n\n📌 Ejemplo:\n.rpg Makuto Russell 27 19/06/1998`
+      text: `✳️ *Uso correcto:*\n.rpg Nombre Apellido Edad FechaNacimiento\n\n📌 Ejemplo:\n.rpg wilker ofc 15 01/08/2010`
     }, { quoted: msg });
   }
 
@@ -36,7 +36,7 @@ const handler = async (msg, { conn, args }) => {
     "🐾 Asignando compañero mascota...",
     "💳 Generando tus créditos de bienvenida...",
     "✅ Registro casi completo...",
-    "🎉 ¡Bienvenido al mundo RPG de *La Suki Bot*!"
+    "🎉 ¡Bienvenido al mundo RPG de *Sakura Haruno*!"
   ];
 
   let { key } = await conn.sendMessage(chatId, { text: steps[0] }, { quoted: msg });
@@ -94,7 +94,7 @@ const handler = async (msg, { conn, args }) => {
   db.usuarios.push(usuario);
   fs.writeFileSync(sukirpgPath, JSON.stringify(db, null, 2));
 
-  const texto = `🎉 *¡Bienvenido al RPG de La Suki Bot!*\n\n` +
+  const texto = `🎉 *¡Bienvenido al RPG de Sakura Haruno!*\n\n` +
                 `👤 *Nombre:* ${nombre} ${apellido}\n` +
                 `📅 *Edad:* ${edad} años\n` +
                 `🎂 *Fecha de Nacimiento:* ${fechaNacimiento}\n` +
@@ -112,7 +112,7 @@ const handler = async (msg, { conn, args }) => {
                 `¡Empieza tu aventura ahora! 🚀`;
 
   await conn.sendMessage(chatId, {
-    image: { url: "https://cdn.russellxz.click/3f6baa71.jpeg" },
+    image: { url: "https://cdn.russellxz.click/b0043441.jpg" },
     caption: texto
   }, { quoted: msg });
 
