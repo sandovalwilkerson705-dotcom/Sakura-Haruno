@@ -10,7 +10,7 @@ const handler = async (msg, { conn, args }) => {
 
   if (args.length < 4) {
     return conn.sendMessage(chatId, {
-      text: `✳️ *Uso correcto:*\n.rpg Nombre Apellido Edad FechaNacimiento\n\n📌 Ejemplo:\n.rpg wilker ofc 15 01/08/2010`
+      text: `✳️ *Uso correcto:*\n.rpg Nombre Apellido Edad FechaNacimiento\n\n📌 Ejemplo:\n.rpg wilker sandoval 15 01/08/2010`
     }, { quoted: msg });
   }
 
