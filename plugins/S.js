@@ -54,7 +54,7 @@ const handler = async (msg, { conn, wa }) => {
     return conn.sendMessage(
       chatId,
       {
-        text: `⚠️ *Bro y la imagen o el vídeo envíala*😂.*\n\n✳️ Ejemplo:\n${pref}s (respondiendo a una imagen)`,
+        text: `⚠️*Usa .s respondiendo a una imagen o vídeo de 8 segundos*⚔️`,
       },
       { quoted: msg }
     );
