@@ -5,7 +5,7 @@ const handler = async (msg, { conn }) => {
   const chatId = msg.key.remoteJid;
   const pref = (Array.isArray(global.prefixes) && global.prefixes[0]) || ".";
 
-  try { await conn.sendMessage2(chatId, { react: { text: "✨", key: msg.key } }, msg); } catch {}
+  try { await conn.sendMessage2(chatId, { react: { text: "🖤", key: msg.key } }, msg); } catch {}
 
   try {
     const filePath = path.resolve("./setmenu.json");
@@ -32,13 +32,13 @@ const handler = async (msg, { conn }) => {
     console.error("[menu] Error leyendo setmenu.json:", e);
   }
 
-  const caption = `𖠺𝐿𝑎 𝑆𝑢𝑘𝑖 𝐵𝑜𝑡𖠺
+  const caption = `*SAKURA HARUNO*
 
-𖠁𝙈𝙀𝙉𝙐 𝙂𝙀𝙉𝙀𝙍𝘼𝙇𖠁
+𖠁*𝙈𝙀𝙉𝙐 𝙂𝙀𝙉𝙀𝙍𝘼𝙇*𖠁
 𖠁𝗣𝗿𝗲𝗳𝗶𝗷𝗼 𝗔𝗰𝘁𝘂𝗮𝗹: 『 ${pref} 』
 𖠁𝗨𝘀𝗮 𝗲𝗻 𝗰𝗮𝗱𝗮 𝗰𝗼𝗺𝗮𝗻𝗱𝗼
 
-𖠁𝙄𝙉𝙁𝙊𝙍𝙈𝘼𝘾𝙄𝙊𝙉𖠁
+𖠁*𝙄𝙉𝙁𝙊𝙍𝙈𝘼𝘾𝙄𝙊𝙉*𖠁
 ╭─────◆
 │๛ ${pref}ping
 │๛ ${pref}speedtest
@@ -46,7 +46,7 @@ const handler = async (msg, { conn }) => {
 │๛ ${pref}info
 ╰─────◆
 
-𖠁𝙈𝙀𝙉𝙐𝙎 𝘿𝙄𝙎𝙋𝙊𝙉𝙄𝘽𝙇𝙀𝙎𖠁
+𖠁*𝙈𝙀𝙉𝙐𝙎 𝘿𝙄𝙎𝙋𝙊𝙉𝙄𝘽𝙇𝙀𝙎*𖠁
 ╭─────◆
 │๛ ${pref}menugrupo
 │๛ ${pref}menuaudio
@@ -55,7 +55,7 @@ const handler = async (msg, { conn }) => {
 │๛ ${pref}menufree
 ╰─────◆
 
-𖠁PARA VENTAS 𖠁
+𖠁*PARA VENTAS*𖠁
 ╭─────◆
 │๛ ${pref}setstock / stock
 │๛ ${pref}setnetflix / netflix
@@ -74,7 +74,7 @@ const handler = async (msg, { conn }) => {
 │๛ ${pref}verfac
 ╰─────◆
 
-𖠁𝙄𝘼 - 𝘾𝙃𝘼𝙏 𝘽𝙊𝙏𖠁
+𖠁*𝙄𝘼 - 𝘾𝙃𝘼𝙏 𝘽𝙊𝙏*𖠁
 ╭─────◆
 │๛ ${pref}gemini
 │๛ ${pref}chatgpt
@@ -85,7 +85,7 @@ const handler = async (msg, { conn }) => {
 │๛ ${pref}luminai
 ╰─────◆
 
-𖠁𝘿𝙀𝙎𝘾𝘼𝙍𝙂𝘼𖠁
+𖠁*𝘿𝙀𝙎𝘾𝘼𝙍𝙂𝘼*𖠁
 ╭─────◆
 │๛ ${pref}play / play1 / play2 / play3
 │๛ ${pref}ytmp3 / ytmp4 / ytmp3doc / ytmp4doc
@@ -95,7 +95,7 @@ const handler = async (msg, { conn }) => {
 │๛ ${pref}mediafire / apk
 ╰─────◆
 
-𖠁𝘽𝙐𝙎𝘾𝘼𝘿𝙊𝙍𝙀𝙎𖠁
+𖠁*𝘽𝙐𝙎𝘾𝘼𝘿𝙊𝙍𝙀𝙎*𖠁
 ╭─────◆
 │๛ ${pref}pixai
 │๛ ${pref}tiktoksearch
@@ -103,7 +103,7 @@ const handler = async (msg, { conn }) => {
 │๛ ${pref}tiktokstalk
 ╰─────◆
 
-𖠁𝘾𝙊𝙉𝙑𝙀𝙍𝙏𝙄𝘿𝙊𝙍𝙀𝙎𖠁
+𖠁*𝘾𝙊𝙉𝙑𝙀𝙍𝙏𝙄𝘿𝙊𝙍𝙀𝙎*𖠁
 ╭─────◆
 │๛ ${pref}tomp3
 │๛ ${pref}toaudio
@@ -113,20 +113,20 @@ const handler = async (msg, { conn }) => {
 │๛ ${pref}gifvideo / ff / ff2
 ╰─────◆
 
-𖠁𝙎𝙏𝙄𝘾𝙆𝙀𝙍𝙎𖠁
+𖠁*𝙎𝙏𝙄𝘾𝙆𝙀𝙍𝙎*𖠁
 ╭─────◆
 │๛ ${pref}s / qc / qc2 / texto
 │๛ ${pref}mixemoji / aniemoji
 │๛ ${pref}addco / delco
 ╰─────◆
 
-𖠁𝙃𝙀𝙍𝙍𝘼𝙈𝙄𝙀𝙉𝙏𝘼𝙎𖠁
+𖠁*𝙃𝙀𝙍𝙍𝘼𝙈𝙄𝙀𝙉𝙏𝘼𝙎*𖠁
 ╭─────◆
 │๛ ${pref}ver / perfil / get / xxx
 │๛ ${pref}tourl / whatmusic
 ╰─────◆
 
-𖠁𝙈𝙄𝙉𝙄 𝙅𝙐𝙀𝙂𝙊𝙎𖠁 
+𖠁*𝙈𝙄𝙉𝙄 𝙅𝙐𝙀𝙂𝙊𝙎*𖠁 
 ╭─────◆
 │๛ ${pref}verdad / reto
 │๛ ${pref}personalidad
@@ -136,11 +136,11 @@ const handler = async (msg, { conn }) => {
 │๛ ${pref}menurpg
 ╰─────◆
 
-✨ Gracias por usar *La Suki Bot*. Eres adorable 💖
+🤍 Gracias por usar *SAKURA HARUNO*.🖤
 `.trim();
 
   await conn.sendMessage2(chatId, {
-    video: { url: "https://cdn.russellxz.click/a289f34c.mp4" },
+    video: { url: "https://cdn.russellxz.click/483421f8.mp4" },
     gifPlayback: true,
     caption
   }, msg);
