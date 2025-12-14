@@ -10,7 +10,7 @@ const streamPipe = promisify(pipeline);
 
 // ==== CONFIG DE TU API ====
 const API_BASE = process.env.API_BASE || "https://api-sky.ultraplus.click";
-const API_KEY  = process.env.API_KEY  || "Russellxz"; // <-- tu API Key
+const API_KEY  = process.env.API_KEY  || "LBugJUD2BdBP"; // <-- tu API Key
 
 // Almacena tareas pendientes por previewMessageId
 const pending = {};
@@ -73,7 +73,7 @@ module.exports = async (msg, { conn, text }) => {
   const viewsFmt = (views || 0).toLocaleString();
 
   const caption = `
-❦𝑳𝑨 𝑺𝑼𝑲𝑰 𝑩𝑶𝑻❦
+ *SAKURA HARUNO*
 
 📀 𝙸𝚗𝚏𝚘 𝚍𝚎𝚕 𝚟𝚒𝚍𝚎𝚘:
 ❥ 𝑻𝒊𝒕𝒖𝒍𝒐: ${title}
@@ -89,7 +89,7 @@ module.exports = async (msg, { conn, text }) => {
 ☛ 📄 Audio Doc     (4 / audiodoc)
 ☛ 📁 Video Doc     (3 / videodoc)
 
-❦𝑳𝑨 𝑺𝑼𝑲𝑰 𝑩𝑶𝑻❦
+*SAKURA HARUNO*
 `.trim();
 
   // envía preview
@@ -280,7 +280,7 @@ async function downloadVideo(conn, job, asDocument, quoted) {
     [asDocument ? "document" : "video"]: fs.readFileSync(file),
     mimetype: "video/mp4",
     fileName: `${title}.mp4`,
-    caption: `🎬 𝐀𝐪𝐮𝐢́ 𝐭𝐢𝐞𝐧𝐞𝐬 𝐭𝐮 𝐯𝐢𝐝𝐞𝐨~ 💫\n• API: api-sky.ultraplus.click\n© 𝐋𝐚 𝐒𝐮𝐤𝐢 𝐁𝐨𝐭`
+    caption: `🎬 𝐀𝐪𝐮𝐢́ 𝐭𝐢𝐞𝐧𝐞𝐬 𝐭𝐮 𝐯𝐢𝐝𝐞𝐨~ 💫\n• API: api-sky.ultraplus.click\n© SAKURA HARUNO`
   }, { quoted });
 
   try { fs.unlinkSync(file); } catch {}
