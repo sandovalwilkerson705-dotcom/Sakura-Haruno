@@ -88,7 +88,7 @@ const handler = async (msg, { conn, command, wa }) => {
     }
 
     // 3) Llamar a Remini (neoxr)
-    const API_KEY    = "russellxz"; // tu key
+    const API_KEY    = "paCQuE"; // tu key
     const REMINI_URL = "https://api.neoxr.eu/api/remini";
     const rem = await axios.get(
       `${REMINI_URL}?image=${encodeURIComponent(imageUrl)}&apikey=${API_KEY}`,
