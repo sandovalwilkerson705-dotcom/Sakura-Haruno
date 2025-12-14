@@ -4,7 +4,7 @@ const handler = async (msg, { conn }) => {
 
   await conn.sendMessage2(chatId, { react: { text: "✨", key: msg.key } }, msg);
 
-  const caption = `𖠺𝐿𝑎 𝑆𝑢𝑘𝑖 𝐵𝑜𝑡 — 𝙈𝙀𝙉𝙐 𝙍𝙋𝙂𖠺
+  const caption = `†𝙈𝙀𝙉𝙐 𝙍𝙋𝙂†
 
 𖠁𝙋𝙍𝙀𝙁𝙄𝙅𝙊𖠁
 ╭─────◆
@@ -106,12 +106,12 @@ const handler = async (msg, { conn }) => {
 │๛ ${pref}addbank
 ╰─────◆
 
-✨ Disfruta el mundo RPG de *La Suki Bot*. ¡Suerte, héroe!`;
+✨ Disfruta el mundo RPG de *Sakura Haruno*. ¡Suerte, héroe!`;
 
   await conn.sendMessage2(
     chatId,
     {
-      image: { url: "https://cdn.russellxz.click/d744b5bf.jpeg" },
+      image: { url: "https://cdn.russellxz.click/012aac15.jpg" },
       caption
     },
     msg
