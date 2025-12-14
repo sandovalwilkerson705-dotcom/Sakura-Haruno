@@ -20,7 +20,7 @@ const handler = async (msg, { conn }) => {
 
   const caption = `
 ╔════════════════════╗
-║🤖 *ALL MENU LA SUKI BOT*
+║*SAKURA HARUNO ALLMENU*
 ╚════════════════════╝
 
 🧠 *Bot creado desde cero.*
@@ -34,7 +34,7 @@ ${todosLosComandos.map(c => `➤ ${prefijo}${c}`).join("\n")}
 `.trim();
 
   return conn.sendMessage2(chatId, {
-    image: { url: "https://cdn.russellxz.click/40df9bcb.jpeg" },
+    image: { url: "https://cdn.russellxz.click/5615db7e.jpg" },
     caption
   }, msg);
 };
