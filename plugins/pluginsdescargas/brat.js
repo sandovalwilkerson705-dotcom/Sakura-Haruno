@@ -68,7 +68,7 @@ const handler = async (msg, { conn, args }) => {
 
     // No quites créditos weon
     await conn.sendMessage(msg.key.remoteJid, {
-      text: "> ✨ Powered by: *ghostdev.js*",
+      text: "> ✨ Powered by: *WILKER OFC*",
     }, { quoted: msg });
 
   } catch (error) {
