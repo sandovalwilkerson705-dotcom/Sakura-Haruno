@@ -7,10 +7,10 @@ const handler = async (msg, { conn, args }) => {
   const chatId = msg.key.remoteJid;
   const text = args.join(" ");
 
-  // Verificar cooldown (1 minutos = 10000 ms)
+  // Verificar cooldown (3 minutos = 180000 ms)
   const now = Date.now();
   const lastUsed = cooldownMap.get(chatId);
-  const cooldownTime = 10000; // 3 minutos en milisegundos
+  const cooldownTime = 180000; // 3 minutos en milisegundos
 
   if (lastUsed && (now - lastUsed) < cooldownTime) {
     const timeLeft = Math.ceil((cooldownTime - (now - lastUsed)) / 1000);
@@ -41,8 +41,8 @@ const handler = async (msg, { conn, args }) => {
     }
 
     // seleccionar hasta 1p imágenes random
-    const shuffled = res.data.sort(() => 0.7 - Math.random());
-    const selected = shuffled.slice(0, 7);
+    const shuffled = res.data.sort(() => 0.10 - Math.random());
+    const selected = shuffled.slice(0, 10);
 
     for (const [i, img] of selected.entries()) {
       await conn.sendMessage(chatId, {
