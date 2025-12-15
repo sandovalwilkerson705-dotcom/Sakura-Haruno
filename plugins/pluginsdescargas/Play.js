@@ -22,7 +22,7 @@ const MAX_MB = 99;
 // Calidades válidas (de tu API)
 const VALID_QUALITIES = new Set(["144", "240", "360", "720", "1080", "1440", "4k"]);
 
-// Almacena tareas pendientes por messageId
+// Almacena tareas pendientes por previewMessageId
 const pending = {};
 
 // ---------- utils ----------
@@ -61,6 +61,8 @@ function extractQualityFromText(input = "") {
 }
 
 function splitQueryAndQuality(rawText = "") {
+  // Permite: ".play ozuna 720" => query="ozuna", quality="720"
+  // Si no hay calidad => query=rawText, quality=""
   const t = String(rawText || "").trim();
   if (!t) return { query: "", quality: "" };
 
@@ -99,6 +101,7 @@ async function downloadToFile(url, filePath) {
     Accept: "*/*",
   };
 
+  // si descargas desde TU API (/youtube/dl) necesitas apikey
   if (isApiUrl(url)) headers["apikey"] = API_KEY;
 
   const res = await axios.get(url, {
@@ -119,6 +122,7 @@ async function downloadToFile(url, filePath) {
 
 // ---------- API ----------
 async function callYoutubeResolve(videoUrl, { type, quality, format }) {
+  // POST /youtube/resolve
   const endpoint = `${API_BASE}/youtube/resolve`;
 
   const body =
@@ -145,9 +149,11 @@ async function callYoutubeResolve(videoUrl, { type, quality, format }) {
   const result = data.result || data.data || data;
   if (!result?.media) throw new Error("API sin media");
 
+  // dl_download puede venir como "/youtube/dl?...."
   let dl = result.media.dl_download || "";
   if (dl && typeof dl === "string" && dl.startsWith("/")) dl = API_BASE + dl;
 
+  // fallback directo
   const direct = result.media.direct || "";
 
   return {
@@ -163,6 +169,7 @@ async function callYoutubeResolve(videoUrl, { type, quality, format }) {
 module.exports = async (msg, { conn, text }) => {
   const pref = global.prefixes?.[0] || ".";
 
+  // parse: ".play ozuna 720"
   const { query, quality } = splitQueryAndQuality(text);
 
   if (!query) {
@@ -183,6 +190,8 @@ module.exports = async (msg, { conn, text }) => {
 
   const { url: videoUrl, title, timestamp: duration, views, author, thumbnail } = video;
   const viewsFmt = (views || 0).toLocaleString();
+
+  // calidad elegida por el usuario (si no, default 360)
   const chosenQuality = VALID_QUALITIES.has(quality) ? quality : DEFAULT_VIDEO_QUALITY;
 
   const caption = `
@@ -196,88 +205,49 @@ module.exports = async (msg, { conn, text }) => {
 ❥ 𝑳𝒊𝒏𝒌: ${videoUrl}
 
 ⚙️ Calidad video seleccionada: ${chosenQuality === "4k" ? "4K" : `${chosenQuality}p`} (default: 360p)
+🎵 Audio: MP3
 
-📥 Elige una opción:
+📥 Opciones:
+☛ 👍 Audio MP3     (1 / audio)
+☛ ❤️ Video         (2 / video)  -> usa ${chosenQuality === "4k" ? "4K" : `${chosenQuality}p`}
+☛ 📄 Audio Doc     (4 / audiodoc)
+☛ 📁 Video Doc     (3 / videodoc)
+
+*SAKURA HARUNO*
 `.trim();
-
-  // Crear botones
-  const buttons = [
-    {
-      buttonId: `audio_${Date.now()}`,
-      buttonText: { displayText: "🎵 AUDIO" },
-      type: 1
-    },
-    {
-      buttonId: `video_${Date.now()}`,
-      buttonText: { displayText: "🎬 VIDEO" },
-      type: 1
-    }
-  ];
-
-  const buttonMessage = {
-    text: caption,
-    footer: "💡 También puedes responder: 'audio' o 'video 720'",
-    headerType: 1,
-    buttons: buttons,
-    image: { url: thumbnail }
-  };
 
   const preview = await conn.sendMessage(
     msg.key.remoteJid,
-    buttonMessage,
+    { image: { url: thumbnail }, caption },
     { quoted: msg }
   );
 
-  // Guardar info en pending usando el ID del mensaje con botones
   pending[preview.key.id] = {
     chatId: msg.key.remoteJid,
     videoUrl,
     title,
     thumbnail,
     commandMsg: msg,
-    videoQuality: chosenQuality,
+    videoQuality: chosenQuality, // ✅ aquí queda guardado
   };
 
   await conn.sendMessage(msg.key.remoteJid, { react: { text: "✅", key: msg.key } });
 
-  // Listener para botones
+  // listener único
   if (!conn._playproListener) {
     conn._playproListener = true;
 
     conn.ev.on("messages.upsert", async (ev) => {
       for (const m of ev.messages) {
+        // 1) REACCIONES
+        if (m.message?.reactionMessage) {
+          const { key: reactKey, text: emoji } = m.message.reactionMessage;
+          const job = pending[reactKey.id];
+          if (job) await handleDownload(conn, job, emoji, job.commandMsg, "");
+        }
+
+        // 2) RESPUESTAS CITADAS
         try {
-          // 1) Manejo de botones
-          if (m.message?.buttonsMessage || m.message?.templateMessage?.fourRowTemplate) {
-            const selectedButtonId = m.message?.buttonsMessage?.selectedButtonId || 
-                                     m.message?.templateMessage?.fourRowTemplate?.content?.buttons?.[0]?.buttonId;
-            
-            if (!selectedButtonId) continue;
-
-            // Buscar el mensaje original al que pertenece este botón
-            const context = m.message?.buttonsMessage?.contextInfo || 
-                           m.message?.templateMessage?.fourRowTemplate?.content?.contextInfo;
-            const originalMsgId = context?.stanzaId;
-
-            const job = pending[originalMsgId];
-            if (!job) continue;
-
-            const chatId = m.key.remoteJid;
-
-            if (selectedButtonId.startsWith('audio_')) {
-              await conn.sendMessage(chatId, { text: `🎶 Descargando audio (mp3)...` }, { quoted: m });
-              await downloadAudio(conn, job, false, m);
-              delete pending[originalMsgId];
-            } 
-            else if (selectedButtonId.startsWith('video_')) {
-              const useQuality = job.videoQuality || DEFAULT_VIDEO_QUALITY;
-              await conn.sendMessage(chatId, { text: `🎥 Descargando video (${useQuality === "4k" ? "4K" : useQuality + "p"})...` }, { quoted: m });
-              await downloadVideo(conn, job, false, m);
-              delete pending[originalMsgId];
-            }
-          }
-
-          // 2) Manejo de respuestas con texto (mantenido para compatibilidad)
           const context = m.message?.extendedTextMessage?.contextInfo;
           const citado = context?.stanzaId;
 
@@ -291,32 +261,63 @@ module.exports = async (msg, { conn, text }) => {
           const chatId = m.key.remoteJid;
 
           if (citado && job) {
+            // permite "video 720" o "2 720"
             const qFromReply = extractQualityFromText(texto);
 
             // AUDIO
-            if (["audio", "1", "4", "audiodoc"].includes(texto.split(/\s+/)[0])) {
+            if (["1", "audio", "4", "audiodoc"].includes(texto.split(/\s+/)[0])) {
               const docMode = texto.startsWith("4") || texto.includes("audiodoc");
+              await conn.sendMessage(chatId, { react: { text: docMode ? "📄" : "🎵", key: m.key } });
               await conn.sendMessage(chatId, { text: `🎶 Descargando audio (mp3)...` }, { quoted: m });
               await downloadAudio(conn, job, docMode, m);
-              delete pending[citado];
             }
             // VIDEO
-            else if (["video", "2", "3", "videodoc"].includes(texto.split(/\s+/)[0])) {
+            else if (["2", "video", "3", "videodoc"].includes(texto.split(/\s+/)[0])) {
               const docMode = texto.startsWith("3") || texto.includes("videodoc");
+
+              // si el usuario especificó quality en la respuesta, úsalo
               const useQuality = VALID_QUALITIES.has(qFromReply) ? qFromReply : (job.videoQuality || DEFAULT_VIDEO_QUALITY);
 
+              await conn.sendMessage(chatId, { react: { text: docMode ? "📁" : "🎬", key: m.key } });
               await conn.sendMessage(chatId, { text: `🎥 Descargando video (${useQuality === "4k" ? "4K" : useQuality + "p"})...` }, { quoted: m });
               await downloadVideo(conn, { ...job, videoQuality: useQuality }, docMode, m);
-              delete pending[citado];
+            } else {
+              await conn.sendMessage(
+                chatId,
+                { text: `⚠️ Opciones:\n1/audio, 4/audiodoc → audio\n2/video, 3/videodoc → video\n\nEj: "video 720"` },
+                { quoted: m }
+              );
+            }
+
+            if (!job._timer) {
+              job._timer = setTimeout(() => delete pending[citado], 5 * 60 * 1000);
             }
           }
         } catch (e) {
-          console.error("Error en listener:", e);
+          console.error("Error en detector citado:", e);
         }
       }
     });
   }
 };
+
+async function handleDownload(conn, job, choice, quoted, extraText) {
+  const mapping = { "👍": "audio", "❤️": "video", "📄": "audioDoc", "📁": "videoDoc" };
+  const key = mapping[choice];
+  if (!key) return;
+
+  const isDoc = key.endsWith("Doc");
+
+  if (key.startsWith("audio")) {
+    await conn.sendMessage(job.chatId, { text: `⏳ Descargando audio (mp3)...` }, { quoted: quoted || job.commandMsg });
+    return downloadAudio(conn, job, isDoc, quoted || job.commandMsg);
+  }
+
+  // video
+  const useQuality = job.videoQuality || DEFAULT_VIDEO_QUALITY;
+  await conn.sendMessage(job.chatId, { text: `⏳ Descargando video (${useQuality === "4k" ? "4K" : useQuality + "p"})...` }, { quoted: quoted || job.commandMsg });
+  return downloadVideo(conn, job, isDoc, quoted || job.commandMsg);
+}
 
 async function downloadAudio(conn, job, asDocument, quoted) {
   const { chatId, videoUrl, title } = job;
@@ -341,6 +342,7 @@ async function downloadAudio(conn, job, asDocument, quoted) {
   const inFile = path.join(tmp, `${Date.now()}_in.bin`);
   await downloadToFile(mediaUrl, inFile);
 
+  // Convertir a mp3 siempre (si falla, manda como doc)
   const outMp3 = path.join(tmp, `${Date.now()}_${base}.mp3`);
   let outFile = outMp3;
 
