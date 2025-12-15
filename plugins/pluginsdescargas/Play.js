@@ -213,6 +213,10 @@ module.exports = async (msg, { conn, text }) => {
 ☛ 📄 Audio Doc     (4 / audiodoc)
 ☛ 📁 Video Doc     (3 / videodoc)
 
+💡 Tip: También puedes responder:
+- "video 720" o "2 720" (cambia calidad)
+- "audio" (siempre mp3)
+
 *SAKURA HARUNO*
 `.trim();
 
@@ -430,3 +434,4 @@ async function downloadVideo(conn, job, asDocument, quoted) {
 }
 
 module.exports.command = ["play"];
+module.exports.command = ["ytmp3"];
